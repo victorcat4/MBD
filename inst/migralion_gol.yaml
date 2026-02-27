@@ -1,0 +1,33 @@
+# Movebank Pipeline Configuration - Container Version
+#
+# IMPORTANT: Paths inside the container use /data for output
+# Your local directory is mounted to /data
+
+movebank:
+  username: your_username
+  password: your_password
+
+taxa:
+  - Aves
+
+sensors:
+  - GPS
+
+# Output directory INSIDE the container (mounted volume)
+output_dir: C:\Users\victor.cat\Desktop\migralion_mb_data
+
+polygon:
+  coordinates:
+    - [2.0, 44.0]
+    - [2.0, 41.0]
+    - [7.0, 41.0]
+    - [7.0, 44.0]
+    - [2.0, 44.0]
+
+processing:
+  chunk_size: 50000
+
+# Incremental download settings
+incremental:
+  enabled: yes
+  min_new_days: 90   # Re-download if Movebank has >90 days of new data

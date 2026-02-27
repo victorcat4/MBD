@@ -1,0 +1,24 @@
+Package: MBD
+Title: Download and Process Movebank Animal Tracking Data
+Version: 0.1.0
+Authors@R: 
+    person("Victor", "CAT", email = "victor.cat@ofb.gouv.fr", role = c("aut", "cre"))
+Description: A simple package to download animal tracking data from Movebank,
+    split by individual, and filter by geographic polygon and taxa. Uses the
+    same YAML configuration format for easy setup.
+License: GPL-3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports:
+    httr,
+    curl,
+    digest,
+    readr,
+    dplyr,
+    sf,
+    yaml,
+    cli
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

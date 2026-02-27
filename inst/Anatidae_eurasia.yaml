@@ -1,0 +1,35 @@
+movebank:
+  username: your_username
+  password: your_password
+  
+taxa:
+  - Anatidae
+  
+sensors:
+- GPS
+- Argos Doppler Shift
+- Solar Geolocator
+
+output_dir: /Users/victorcat/Desktop/Anatidae_mb_data
+
+polygon:
+  coordinates:
+    - [-43.610229, 61.933782]   # Southwest corner
+    - [-25.908508, 31.374744]    # Southeast corner
+    - [5.701904, 23.707409]    # Northeast corner
+    - [153.404846, 41.967659]   # Northwest corner
+    - [179.9, 63.495896]  
+    - [179.9, 81.744117]  
+    - [3.224487, 81.710922]  
+    - [-29.921265, 74.2724]  
+    - [-43.610229, 61.933782]  
+
+# Processing settings
+processing:
+  chunk_size: 50000  # Rows to process at a time (memory management)
+
+# Incremental download settings
+incremental:
+  enabled: yes
+  min_new_days: 90   # Re-download if Movebank has >90 days of new data
+

@@ -1,0 +1,38 @@
+# Example Movebank Configuration File
+# Copy this file and edit with your settings
+
+movebank:
+  username: your_username
+  password: your_password
+
+# Taxa to download (species, genus, family, order, etc.)
+# Higher-level taxa are automatically expanded to species
+taxa:
+  - Falco peregrinus
+
+# Sensor types to include
+sensors:
+  - GPS
+  - Argos Doppler Shift
+
+# Output directory (will be created if it doesn't exist)
+output_dir: C:\Users\victor.cat\Desktop\test
+
+# Optional: Geographic filter (polygon coordinates as [longitude, latitude])
+# Remove this section to download all locations worldwide
+polygon:
+  coordinates:
+    - [-10.0, 35.0]   # Southwest corner
+    - [30.0, 35.0]    # Southeast corner
+    - [30.0, 70.0]    # Northeast corner
+    - [-10.0, 70.0]   # Northwest corner
+    - [-10.0, 35.0]   # Close the polygon (same as first point)
+
+# Processing settings
+processing:
+  chunk_size: 50000  # Rows to process at a time (memory management)
+
+# Incremental download settings
+incremental:
+  enabled: yes
+  min_new_days: 90   # Re-download if Movebank has >90 days of new data
