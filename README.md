@@ -24,6 +24,13 @@ Movebank Data Downloader
 
 ------------------------------------------------------------------------
 
+**MBD** lets you download, split, and filter animal tracking data from [Movebank](https://www.movebank.org) directly in R.
+Define your target taxa (from species to entire classes like *Aves*), sensors, and an optional geographic polygon in a single YAML config file.
+The package handles API authentication, rate limiting, and large file chunking automatically.
+Output is organized into per-individual CSV files, ready for analysis.
+
+------------------------------------------------------------------------
+
 ## 📦 Installation
 
 ``` r
