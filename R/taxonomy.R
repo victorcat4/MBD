@@ -59,17 +59,26 @@ expand_taxa <- function(taxon_name, cache_dir = NULL, cache_days = 30) {
 
 #' Search GBIF for Taxon
 #' @keywords internal
-gbif_search_taxon <- function(taxon_name) {
-  response <- tryCatch({
-    httr::GET("https://api.gbif.org/v1/species/match",
-              query = list(name = taxon_name),
-              httr::timeout(30))
-  }, error = function(e) NULL)
+gbif_search_taxon <- function(taxon_name, max_retries = 3) {
+  data <- NULL
   
-  if (is.null(response) || httr::status_code(response) != 200) return(NULL)
+  for (attempt in seq_len(max_retries)) {
+    data <- tryCatch({
+      response <- httr::GET("https://api.gbif.org/v1/species/match",
+                            query = list(name = taxon_name),
+                            httr::timeout(30))
+      if (httr::status_code(response) != 200) return(NULL)
+      httr::content(response, "parsed")
+    }, error = function(e) {
+      if (attempt < max_retries) Sys.sleep(2 * attempt)
+      NULL
+    })
+    
+    if (!is.null(data)) break
+  }
   
-  data <- httr::content(response, "parsed")
-  if (is.null(data$usageKey) || data$matchType == "NONE") return(NULL)
+  if (is.null(data) || data$matchType == "NONE") return(NULL)
+  if (is.null(data$usageKey)) return(NULL)
   
   # Use canonicalName (without author) for matching, not scientificName
   canonical <- data$canonicalName
@@ -96,14 +105,21 @@ gbif_get_descendants <- function(taxon_key, target_rank, limit = 1000, max_depth
   
   repeat {
     url <- sprintf("https://api.gbif.org/v1/species/%s/children", taxon_key)
-    response <- tryCatch({
-      httr::GET(url, query = list(limit = limit, offset = offset), httr::timeout(30))
-    }, error = function(e) NULL)
     
-    if (is.null(response) || httr::status_code(response) != 200) break
+    data <- NULL
+    for (attempt in seq_len(3)) {
+      data <- tryCatch({
+        response <- httr::GET(url, query = list(limit = limit, offset = offset), httr::timeout(30))
+        if (httr::status_code(response) != 200) return(unique(results))
+        httr::content(response, "parsed")
+      }, error = function(e) {
+        if (attempt < 3) Sys.sleep(2 * attempt)
+        NULL
+      })
+      if (!is.null(data)) break
+    }
     
-    data <- httr::content(response, "parsed")
-    if (length(data$results) == 0) break
+    if (is.null(data) || length(data$results) == 0) break
     
     for (child in data$results) {
       child_rank <- tolower(child$rank)
