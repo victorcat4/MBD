@@ -100,6 +100,20 @@ filter_individuals <- function(config, dirs, force = FALSE) {
     cli::cli_alert_info("No polygon specified, skipping spatial filtering")
   }
   
+  # ===== CLEANUP EMPTY SPECIES DIRECTORIES =====
+  species_dirs <- list.dirs(dirs$individuals, full.names = TRUE, recursive = FALSE)
+  removed_dirs <- 0
+  for (species_dir in species_dirs) {
+    remaining <- list.files(species_dir, pattern = "\\.csv$")
+    if (length(remaining) == 0) {
+      unlink(species_dir, recursive = TRUE)
+      removed_dirs <- removed_dirs + 1
+    }
+  }
+  if (removed_dirs > 0) {
+    cli::cli_alert_info("Removed {removed_dirs} empty species directories")
+  }
+  
   # ===== SUMMARY =====
   cli::cli_h2("Filtering Complete")
   
