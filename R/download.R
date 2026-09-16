@@ -99,21 +99,33 @@ download_studies <- function(config, dirs, force = FALSE) {
     }
   }
   
-  # Filter by download access
-  studies <- studies[studies$i_have_download_access == TRUE |
-                       studies$i_have_download_access == "true" |
-                       tolower(as.character(studies$i_have_download_access)) == "true", ]
-  cli::cli_alert_info("With download access: {nrow(studies)}")
-  
+  # Normalize the access flag, but don't drop no-access studies yet -
+  # all_studies.csv should record every study that matched taxa/sensors,
+  # whether or not we can actually download it.
+  studies$id <- as.character(studies$id)
+  studies$i_have_download_access <- studies$i_have_download_access == TRUE |
+    studies$i_have_download_access == "true" |
+    tolower(as.character(studies$i_have_download_access)) == "true"
+  cli::cli_alert_info("With download access: {sum(studies$i_have_download_access)}")
+  cli::cli_alert_info("Without download access: {sum(!studies$i_have_download_access)}")
+
   if (nrow(studies) == 0) {
     cli::cli_alert_warning("No studies match the criteria")
     return(data.frame())
   }
-  
-  # Save all matching studies
-  studies$id <- as.character(studies$id)
+
+  # Save all matching studies, including ones we don't have access to
   all_studies_file <- file.path(dirs$metadata, "all_studies.csv")
   readr::write_csv(studies, all_studies_file)
+
+  # From here on, only studies we actually have download access to are
+  # eligible for download - the rest just stay recorded in all_studies.csv
+  studies <- studies[studies$i_have_download_access, ]
+
+  if (nrow(studies) == 0) {
+    cli::cli_alert_warning("No studies with download access")
+    return(invisible(studies))
+  }
   
   # Check what needs downloading
   timestamp_file <- file.path(dirs$base, "study_timestamps.csv")
