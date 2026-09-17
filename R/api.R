@@ -270,10 +270,40 @@ movebank_download_study <- function(study_id, username, password, output_file,
 movebank_get_individuals <- function(study_id, username, password) {
   base_url <- "https://www.movebank.org/movebank/service/direct-read"
 
-  response <- tryCatch({
+  # Step 1: get license terms. Movebank requires accepting the study's
+  # license before it will return real data - same handshake
+  # movebank_download_study() does for entity_type=event. Without this,
+  # you get back an HTML license page instead of a CSV.
+  license_response <- tryCatch({
     httr::GET(
       base_url,
       query = list(entity_type = "individual", study_id = study_id),
+      httr::authenticate(username, password, type = "basic"),
+      httr::timeout(60)
+    )
+  }, error = function(e) {
+    cli::cli_alert_warning("  Network error getting individuals for study {study_id}: {e$message}")
+    NULL
+  })
+
+  if (is.null(license_response)) return(data.frame())
+
+  status <- httr::status_code(license_response)
+  if (status != 200) {
+    cli::cli_alert_warning("  Could not get individual metadata for study {study_id} (HTTP {status})")
+    return(data.frame())
+  }
+
+  license_content <- httr::content(license_response, "raw")
+  license_md5 <- digest::digest(license_content, algo = "md5", serialize = FALSE)
+  rm(license_response, license_content)
+
+  # Step 2: re-request, this time accepting the license via its MD5
+  response <- tryCatch({
+    httr::GET(
+      base_url,
+      query = list(entity_type = "individual", study_id = study_id,
+                   `license-md5` = license_md5),
       httr::authenticate(username, password, type = "basic"),
       httr::timeout(60)
     )
@@ -300,11 +330,22 @@ movebank_get_individuals <- function(study_id, username, password) {
 
   if (nrow(result) == 0) return(data.frame())
 
-  # Movebank's individual entity returns the animal id in the "id" column -
-  # rename to individual_id so it lines up with the event data for joining
+  # Movebank's individual entity usually returns the animal id in the "id"
+  # column - rename to individual_id so it lines up with the event data for
+  # joining. Some responses don't have it (e.g. an unexpected/error payload
+  # that still parsed as CSV) - bail out cleanly instead of crashing on a
+  # column that doesn't exist.
   if ("id" %in% names(result)) {
     names(result)[names(result) == "id"] <- "individual_id"
   }
+
+  if (!"individual_id" %in% names(result)) {
+    cli::cli_alert_warning(
+      "  Study {study_id}: individual response had no 'id'/'individual_id' column - got columns: {paste(names(result), collapse = ', ')}"
+    )
+    return(data.frame())
+  }
+
   result$individual_id <- as.character(result$individual_id)
 
   if (!"study_id" %in% names(result)) {
