@@ -182,6 +182,31 @@ download_studies <- function(config, dirs, force = FALSE) {
       if (length(sex_cols) == 0) {
         cli::cli_alert_warning("No sex-related column came back for these studies - it may just not be recorded")
       }
+
+      # Any of these studies that were already split (e.g. their metadata
+      # failed on a previous run but their event data didn't) need to be
+      # re-split now that metadata is available - split_studies() otherwise
+      # sees its "already split" flag and skips them forever, leaving those
+      # individual files permanently without sex/etc columns.
+      for (sid in names(new_meta_list)) {
+        split_flag <- file.path(dirs$raw, paste0(".split_", sid, ".flag"))
+        if (file.exists(split_flag)) {
+          cli::cli_alert_info("  Study {sid} was already split before its metadata was available - clearing it to re-split with metadata")
+          unlink(split_flag)
+
+          # Remove the individual files this study previously produced, so
+          # re-splitting doesn't just append duplicate rows on top of them
+          individuals_list_file <- file.path(dirs$metadata, paste0("individuals_", sid, ".txt"))
+          if (file.exists(individuals_list_file)) {
+            old_files <- readLines(individuals_list_file, warn = FALSE)
+            old_files <- old_files[old_files != ""]
+            if (length(old_files) > 0) {
+              unlink(file.path(dirs$individuals, old_files))
+            }
+            unlink(individuals_list_file)
+          }
+        }
+      }
     } else {
       cli::cli_alert_warning("No individual metadata retrieved")
     }
