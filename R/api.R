@@ -245,6 +245,71 @@ movebank_download_study <- function(study_id, username, password, output_file,
       return(FALSE)
     }
   }
-  
+
   TRUE
+}
+
+#' Get Individual (Animal) Metadata from Movebank
+#'
+#' Retrieves individual-level reference data for the animals in a study -
+#' things like sex, life stage, and mass. This is different from the event
+#' (tracking) data downloaded by \code{movebank_download_study()}: those are
+#' GPS fixes, one row per location; this is one row per animal, fetched via
+#' Movebank's "individual" entity type.
+#'
+#' Not every study records every attribute (e.g. sex may be unknown or just
+#' not entered), so columns can vary study to study. No \code{attributes}
+#' filter is requested, so whatever Movebank has for this study comes back.
+#'
+#' @param study_id Movebank study ID
+#' @param username Movebank username
+#' @param password Movebank password
+#' @return Data frame with one row per individual (empty data frame on
+#'   failure or if the study has no individual metadata)
+#' @export
+movebank_get_individuals <- function(study_id, username, password) {
+  base_url <- "https://www.movebank.org/movebank/service/direct-read"
+
+  response <- tryCatch({
+    httr::GET(
+      base_url,
+      query = list(entity_type = "individual", study_id = study_id),
+      httr::authenticate(username, password, type = "basic"),
+      httr::timeout(60)
+    )
+  }, error = function(e) {
+    cli::cli_alert_warning("  Network error getting individuals for study {study_id}: {e$message}")
+    NULL
+  })
+
+  if (is.null(response)) return(data.frame())
+
+  status <- httr::status_code(response)
+  if (status != 200) {
+    cli::cli_alert_warning("  Could not get individual metadata for study {study_id} (HTTP {status})")
+    return(data.frame())
+  }
+
+  content_text <- httr::content(response, "text", encoding = "UTF-8")
+
+  result <- tryCatch({
+    read.csv(text = content_text, stringsAsFactors = FALSE)
+  }, error = function(e) {
+    data.frame()
+  })
+
+  if (nrow(result) == 0) return(data.frame())
+
+  # Movebank's individual entity returns the animal id in the "id" column -
+  # rename to individual_id so it lines up with the event data for joining
+  if ("id" %in% names(result)) {
+    names(result)[names(result) == "id"] <- "individual_id"
+  }
+  result$individual_id <- as.character(result$individual_id)
+
+  if (!"study_id" %in% names(result)) {
+    result$study_id <- study_id
+  }
+
+  result
 }

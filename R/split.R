@@ -21,26 +21,45 @@ split_studies <- function(config, dirs, force = FALSE) {
   }
   
   cli::cli_alert_info("Found {length(study_files)} study files")
-  
+
+  # Load individual (animal) metadata if we have it, e.g. sex, life stage,
+  # mass - fetched by download_studies() via movebank_get_individuals().
+  # It's optional: if the file isn't there, individual files are written
+  # exactly as before, just without those extra columns.
+  individuals_meta_file <- file.path(dirs$metadata, "individuals_metadata.csv")
+  individual_meta <- NULL
+  if (file.exists(individuals_meta_file)) {
+    individual_meta <- tryCatch(
+      readr::read_csv(individuals_meta_file, show_col_types = FALSE),
+      error = function(e) NULL
+    )
+    if (!is.null(individual_meta) && "individual_id" %in% names(individual_meta)) {
+      cli::cli_alert_info("Loaded individual metadata ({ncol(individual_meta) - 1} columns) to attach while splitting")
+    } else {
+      individual_meta <- NULL
+    }
+  }
+
   all_created_files <- character()
-  
+
   for (i in seq_along(study_files)) {
     study_file <- study_files[i]
     study_id <- gsub("^MB_([0-9]+)\\.csv$", "\\1", basename(study_file))
-    
+
     # Check if already split
     split_flag <- file.path(dirs$raw, paste0(".split_", study_id, ".flag"))
     if (file.exists(split_flag) && !force) {
       cli::cli_alert_info("[{i}/{length(study_files)}] Study {study_id}: already split")
       next
     }
-    
+
     cli::cli_alert_info("[{i}/{length(study_files)}] Splitting study {study_id}...")
-    
+
     created_files <- split_single_study(
       study_file = study_file,
       output_dir = dirs$individuals,
-      chunk_size = chunk_size
+      chunk_size = chunk_size,
+      individual_meta = individual_meta
     )
     
     all_created_files <- c(all_created_files, created_files)
@@ -62,23 +81,41 @@ split_studies <- function(config, dirs, force = FALSE) {
 }
 
 #' Split a Single Study File
+#'
+#' @param individual_meta Optional data frame of individual-level metadata
+#'   (e.g. sex, life stage) with an \code{individual_id} column, from
+#'   \code{movebank_get_individuals()}. When supplied, its columns are
+#'   joined onto every row of each individual's file.
 #' @keywords internal
-split_single_study <- function(study_file, output_dir, chunk_size = 50000) {
+split_single_study <- function(study_file, output_dir, chunk_size = 50000, individual_meta = NULL) {
   # Validate file
   first_chunk <- tryCatch({
     readr::read_csv(study_file, n_max = 1000, col_types = readr::cols(.default = readr::col_character()),
                     show_col_types = FALSE)
   }, error = function(e) NULL)
-  
+
   if (is.null(first_chunk) || nrow(first_chunk) == 0) {
     return(character())
   }
-  
+
   required_cols <- c("individual_id", "location_long", "location_lat", "sensor_type_id")
   if (!all(required_cols %in% names(first_chunk))) {
     return(character())
   }
-  
+
+  # Columns to bring in from the individual metadata table (everything
+  # except the join key and study_id, which the event data already has)
+  meta_cols <- character()
+  if (!is.null(individual_meta) && "individual_id" %in% names(individual_meta)) {
+    individual_meta$individual_id <- as.character(individual_meta$individual_id)
+    meta_cols <- setdiff(names(individual_meta), c("individual_id", "study_id"))
+    # Avoid duplicating columns the event data already has (e.g. taxon name)
+    meta_cols <- setdiff(meta_cols, names(first_chunk))
+    individual_meta <- individual_meta[, c("individual_id", meta_cols), drop = FALSE]
+  } else {
+    individual_meta <- NULL
+  }
+
   # Track created files
   created_files <- character()
   individuals_seen <- list()
@@ -122,10 +159,15 @@ split_single_study <- function(study_file, output_dir, chunk_size = 50000) {
       
       if (nrow(chunk) == 0) return(NULL)
       
+      # Attach individual metadata (sex, life stage, etc.), if we have it
+      if (!is.null(individual_meta) && length(meta_cols) > 0) {
+        chunk <- dplyr::left_join(chunk, individual_meta, by = "individual_id")
+      }
+
       # Split by individual
       for (ind_id in unique(chunk$individual_id)) {
         ind_chunk <- chunk[chunk$individual_id == ind_id, ]
-        
+
         # Get metadata
         species_full <- ind_chunk$individual_taxon_canonical_name[1]
         

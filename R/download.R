@@ -126,7 +126,65 @@ download_studies <- function(config, dirs, force = FALSE) {
     cli::cli_alert_warning("No studies with download access")
     return(invisible(studies))
   }
-  
+
+  # ===== Fetch individual (animal) metadata: sex, life stage, mass, etc. =====
+  # This is separate reference data from the event/tracking data below -
+  # Movebank exposes it via entity_type = "individual". It's cheap compared
+  # to the event downloads, so we fetch it for every accessible study and
+  # cache it, only re-fetching studies we don't already have (or all of
+  # them if force = TRUE).
+  cli::cli_h2("Fetching Individual Metadata")
+  individuals_meta_file <- file.path(dirs$metadata, "individuals_metadata.csv")
+
+  existing_meta <- if (file.exists(individuals_meta_file) && !force) {
+    readr::read_csv(individuals_meta_file, show_col_types = FALSE)
+  } else {
+    data.frame()
+  }
+
+  already_have <- if (nrow(existing_meta) > 0 && "study_id" %in% names(existing_meta)) {
+    unique(as.character(existing_meta$study_id))
+  } else {
+    character()
+  }
+
+  study_ids_needed <- setdiff(studies$id, already_have)
+
+  if (length(study_ids_needed) > 0) {
+    cli::cli_alert_info("Fetching individual metadata for {length(study_ids_needed)} studies...")
+    new_meta_list <- list()
+
+    for (sid in study_ids_needed) {
+      meta <- tryCatch(
+        movebank_get_individuals(sid, username, password),
+        error = function(e) {
+          cli::cli_alert_warning("  Could not fetch individual metadata for study {sid}: {e$message}")
+          data.frame()
+        }
+      )
+      if (nrow(meta) > 0) {
+        new_meta_list[[sid]] <- meta
+      }
+      Sys.sleep(0.5)
+    }
+
+    if (length(new_meta_list) > 0) {
+      new_meta <- dplyr::bind_rows(new_meta_list)
+      combined_meta <- dplyr::bind_rows(existing_meta, new_meta)
+      readr::write_csv(combined_meta, individuals_meta_file)
+      cli::cli_alert_success("Saved individual metadata: {nrow(new_meta)} individuals across {length(new_meta_list)} studies")
+
+      sex_cols <- grep("sex", names(combined_meta), ignore.case = TRUE, value = TRUE)
+      if (length(sex_cols) == 0) {
+        cli::cli_alert_warning("No sex-related column came back for these studies - it may just not be recorded")
+      }
+    } else {
+      cli::cli_alert_warning("No individual metadata retrieved")
+    }
+  } else {
+    cli::cli_alert_info("Individual metadata already up to date")
+  }
+
   # Check what needs downloading
   timestamp_file <- file.path(dirs$base, "study_timestamps.csv")
   existing_files <- list.files(dirs$raw, pattern = "^MB_[0-9]+\\.csv$")
