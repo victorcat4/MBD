@@ -352,5 +352,11 @@ movebank_get_individuals <- function(study_id, username, password) {
     result$study_id <- study_id
   }
 
+  # Different studies use different types for the same field (e.g. marker_id
+  # can be a plain integer in one study and alphanumeric text in another).
+  # Force everything to character so results from many studies can be
+  # combined later with dplyr::bind_rows() without type clashes.
+  result[] <- lapply(result, as.character)
+
   result
 }

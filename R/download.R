@@ -137,7 +137,11 @@ download_studies <- function(config, dirs, force = FALSE) {
   individuals_meta_file <- file.path(dirs$metadata, "individuals_metadata.csv")
 
   existing_meta <- if (file.exists(individuals_meta_file) && !force) {
-    readr::read_csv(individuals_meta_file, show_col_types = FALSE)
+    # Read everything as character - matches how movebank_get_individuals()
+    # returns it, so re-combining with newly fetched studies never hits a
+    # type mismatch in bind_rows()
+    readr::read_csv(individuals_meta_file, show_col_types = FALSE,
+                     col_types = readr::cols(.default = readr::col_character()))
   } else {
     data.frame()
   }
